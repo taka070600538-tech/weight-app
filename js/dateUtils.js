@@ -15,3 +15,9 @@ export function shiftDate(dateStr, days) {
   date.setDate(date.getDate() + days);
   return formatDate(date);
 }
+
+// dateStrAからdateStrBまでの日数差。DST等で端数がずれる可能性があるためroundで安全に丸める。
+export function daysBetween(dateStrA, dateStrB) {
+  const diff = parseDate(dateStrB) - parseDate(dateStrA);
+  return Math.round(diff / 86400000);
+}

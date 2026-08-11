@@ -9,7 +9,7 @@ const PERIODS = [
   { id: 'all', label: '全期間', days: null },
 ];
 
-function chartSection(title, points, target, unit, color) {
+function chartSection(title, points, target, unit, color, daysPerScreen) {
   if (points.length === 0) {
     return `<section class="panel">
       <h2 class="panel-title">${title}</h2>
@@ -18,13 +18,13 @@ function chartSection(title, points, target, unit, color) {
   }
   return `<section class="panel">
     <h2 class="panel-title">${title}</h2>
-    <div class="chart-scroll">${buildLineChartSvg(points, { target, unit, color })}</div>
+    <div class="chart-scroll">${buildLineChartSvg(points, { target, unit, color, daysPerScreen })}</div>
     ${target != null ? `<p class="panel-note">赤の点線は目標(${target}${unit})</p>` : ''}
   </section>`;
 }
 
 export function renderGraphView(container) {
-  const state = { period: '1m' };
+  const state = { period: 'all' };
 
   function render() {
     const today = formatDate(new Date());
@@ -34,6 +34,7 @@ export function renderGraphView(container) {
     const profile = loadProfile(localStorage);
     const weightPoints = records.filter((r) => r.weight != null).map((r) => ({ date: r.date, value: r.weight }));
     const waistPoints = records.filter((r) => r.waist != null).map((r) => ({ date: r.date, value: r.waist }));
+    const daysPerScreen = period.days ?? 365;
 
     const buttons = PERIODS.map((p) =>
       `<button type="button" class="seg-btn ${p.id === state.period ? 'is-active' : ''}" data-period="${p.id}">${p.label}</button>`
@@ -41,8 +42,8 @@ export function renderGraphView(container) {
 
     container.innerHTML = `
       <div class="seg-control">${buttons}</div>
-      ${chartSection('体重の推移', weightPoints, profile.targetWeight, 'kg', '#059669')}
-      ${chartSection('腹囲の推移', waistPoints, profile.targetWaist, 'cm', '#0ea5e9')}
+      ${chartSection('体重の推移', weightPoints, profile.targetWeight, 'kg', '#059669', daysPerScreen)}
+      ${chartSection('腹囲の推移', waistPoints, profile.targetWaist, 'cm', '#0ea5e9', daysPerScreen)}
     `;
 
     container.querySelectorAll('.seg-btn').forEach((btn) => {

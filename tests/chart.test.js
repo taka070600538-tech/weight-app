@@ -38,3 +38,44 @@ test('buildLineChartSvg: 1点でも例外なく描ける', () => {
   const svg = buildLineChartSvg([{ date: '2026-08-01', value: 57 }], {});
   assert.ok(svg.startsWith('<svg'));
 });
+
+test('buildLineChartSvg: 60日以上のギャップがあると点線(stroke-dasharray="6 6")が出る', () => {
+  const points = [
+    { date: '2026-01-01', value: 57 },
+    { date: '2026-01-05', value: 56.5 },
+    { date: '2026-04-01', value: 55 },
+  ];
+  const svg = buildLineChartSvg(points, {});
+  assert.ok(svg.includes('stroke-dasharray="6 6"'));
+});
+
+test('buildLineChartSvg: ギャップがないデータでは点線(stroke-dasharray="6 6")が出ない', () => {
+  const points = [
+    { date: '2026-08-01', value: 57 },
+    { date: '2026-08-02', value: 56.5 },
+    { date: '2026-08-03', value: 56 },
+  ];
+  const svg = buildLineChartSvg(points, {});
+  assert.ok(!svg.includes('stroke-dasharray="6 6"'));
+});
+
+test('buildLineChartSvg: daysPerScreen=365で1年超のデータはmin-widthが付く', () => {
+  const points = [
+    { date: '2025-01-01', value: 57 },
+    { date: '2026-08-01', value: 55 },
+  ];
+  const svg = buildLineChartSvg(points, { daysPerScreen: 365 });
+  const match = svg.match(/min-width:([\d.]+)px/);
+  assert.ok(match);
+  assert.ok(Number(match[1]) > 374);
+});
+
+test('buildLineChartSvg: daysPerScreen=365で1年未満のデータは固定幅374', () => {
+  const points = [
+    { date: '2026-08-01', value: 57 },
+    { date: '2026-08-10', value: 56 },
+  ];
+  const svg = buildLineChartSvg(points, { daysPerScreen: 365 });
+  assert.ok(!svg.includes('min-width'));
+  assert.ok(svg.includes('viewBox="0 0 374 360"'));
+});

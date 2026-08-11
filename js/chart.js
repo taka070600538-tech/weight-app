@@ -1,20 +1,17 @@
+import { daysBetween } from './dateUtils.js';
+
 const VIEW_HEIGHT = 360;
 const PLOT_LEFT = 42;
 const RIGHT_MARGIN = 10;
-const MIN_VIEW_WIDTH = 374; // 30点以下はこの固定幅
+const MIN_VIEW_WIDTH = 374; // 表示期間が短いときの固定幅
 const PLOT_TOP = 10;
 const PLOT_BOTTOM = 305; // 下側はx軸ラベル用の余白
 const PLOT_HEIGHT = PLOT_BOTTOM - PLOT_TOP;
-const SPACING_30 = (364 - PLOT_LEFT) / 29; // 30点表示時の点間隔
 const X_LABEL_MIN_GAP = 45;
 const X_LABEL_Y = 330;
 const Y_LABEL_X = 34;
 const AXIS_LABEL_COLOR = '#9ca3af';
-
-function computeViewWidth(n) {
-  if (n <= 30) return MIN_VIEW_WIDTH;
-  return PLOT_LEFT + (n - 1) * SPACING_30 + RIGHT_MARGIN;
-}
+const GAP_SEGMENT_DAYS = 60; // 2ヶ月の近似。これ以上間隔が空いたら線を分割し点線で結ぶ
 
 function round2(n) {
   return Math.round(n * 100) / 100;
@@ -94,17 +91,20 @@ export function monotonePath(points) {
   return d;
 }
 
-export function buildLineChartSvg(points, { target = null, unit = '', color = '#059669' } = {}) {
+export function buildLineChartSvg(points, { target = null, unit = '', color = '#059669', daysPerScreen = 365 } = {}) {
   const values = points.map((p) => p.value);
   if (target != null) values.push(target);
   const axis = computeAxis(values);
   const span = axis.top - axis.bottom;
   const n = points.length;
-  const viewWidth = computeViewWidth(n);
-  const plotRight = viewWidth - RIGHT_MARGIN;
-  const plotWidth = plotRight - PLOT_LEFT;
 
-  const xFor = (i) => (n === 1 ? (PLOT_LEFT + plotRight) / 2 : PLOT_LEFT + (i / (n - 1)) * plotWidth);
+  // x軸は日付に比例させる(等間隔ではない)。pxPerDayは「daysPerScreen日をMIN_VIEW_WIDTHに収める」密度。
+  const pxPerDay = (MIN_VIEW_WIDTH - PLOT_LEFT - RIGHT_MARGIN) / daysPerScreen;
+  const totalDays = n > 1 ? daysBetween(points[0].date, points[n - 1].date) : 0;
+  const viewWidth = Math.max(MIN_VIEW_WIDTH, PLOT_LEFT + totalDays * pxPerDay + RIGHT_MARGIN);
+  const plotRight = viewWidth - RIGHT_MARGIN;
+
+  const xFor = (i) => (n === 1 ? (PLOT_LEFT + plotRight) / 2 : PLOT_LEFT + daysBetween(points[0].date, points[i].date) * pxPerDay);
   const yFor = (value) => PLOT_TOP + PLOT_HEIGHT * (1 - (value - axis.bottom) / span);
 
   // 水平グリッド線と数値ラベル(浮動小数の蓄積誤差をround1で吸収)
@@ -124,31 +124,63 @@ export function buildLineChartSvg(points, { target = null, unit = '', color = '#
   }
 
   const xy = points.map((p, i) => ({ x: round2(xFor(i)), y: round2(yFor(p.value)) }));
-  const d = monotonePath(xy);
-  const path = d ? `<path d="${d}" style="stroke:${color}; stroke-width:2.5; fill:none; stroke-linejoin:round; stroke-linecap:round;" />` : '';
-  const dots = xy
-    .map((p) => `<circle cx="${p.x}" cy="${p.y}" r="3" style="fill:#fff; stroke:${color}; stroke-width:2.5;" />`)
-    .join('');
 
-  // x軸ラベルは最低45px間隔になるよう間引く(線とドットは全点描く)
-  const spacing = n > 1 ? plotWidth / (n - 1) : 0;
-  const interval = n > 1 ? Math.max(1, Math.ceil(X_LABEL_MIN_GAP / spacing)) : 1;
-  const xLabels = points
-    .map((p, i) => {
-      if (i % interval !== 0 && i !== n - 1) return '';
-      return `<text class="chart-axis-label" x="${round2(xFor(i))}" y="${X_LABEL_Y}" text-anchor="middle" fill="${AXIS_LABEL_COLOR}">${toMonthDay(p.date)}</text>`;
-    })
-    .join('');
+  // 間隔がGAP_SEGMENT_DAYS以上空いた点の間はセグメントを分割する
+  const segments = [[0]];
+  for (let i = 1; i < n; i++) {
+    const gapDays = daysBetween(points[i - 1].date, points[i].date);
+    if (gapDays < GAP_SEGMENT_DAYS) {
+      segments[segments.length - 1].push(i);
+    } else {
+      segments.push([i]);
+    }
+  }
+
+  // セグメント内(2点以上)はmonotone曲線の実線、セグメント間の空白は点線の直線で結ぶ
+  let path = '';
+  let gapLines = '';
+  segments.forEach((seg, segIndex) => {
+    if (seg.length >= 2) {
+      const d = monotonePath(seg.map((i) => xy[i]));
+      if (d) path += `<path d="${d}" style="stroke:${color}; stroke-width:2.5; fill:none; stroke-linejoin:round; stroke-linecap:round;" />`;
+    }
+    if (segIndex > 0) {
+      const prevIndex = segments[segIndex - 1][segments[segIndex - 1].length - 1];
+      const curIndex = seg[0];
+      const p1 = xy[prevIndex];
+      const p2 = xy[curIndex];
+      gapLines += `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="${color}" stroke-width="2" stroke-dasharray="6 6" opacity="0.6" />`;
+    }
+  });
+
+  // 点が密集しているときはドットを縮小・省略して線を見やすくする
+  const avgSpacing = n > 1 ? (xy[n - 1].x - xy[0].x) / (n - 1) : Infinity;
+  const dotRadius = avgSpacing >= 8 ? 3 : avgSpacing >= 4 ? 2 : 0;
+  const dots = dotRadius > 0
+    ? xy.map((p) => `<circle cx="${p.x}" cy="${p.y}" r="${dotRadius}" style="fill:#fff; stroke:${color}; stroke-width:2.5;" />`).join('')
+    : '';
+
+  // x軸ラベルは貪欲法で間引く: 先頭は必ず描画し、以降は前回描画したラベルから45px以上離れた点のみ描画
+  let xLabels = '';
+  let lastLabelX = null;
+  points.forEach((p, i) => {
+    const x = xy[i].x;
+    if (i === 0 || lastLabelX === null || x - lastLabelX >= X_LABEL_MIN_GAP) {
+      xLabels += `<text class="chart-axis-label" x="${x}" y="${X_LABEL_Y}" text-anchor="middle" fill="${AXIS_LABEL_COLOR}">${toMonthDay(p.date)}</text>`;
+      lastLabelX = x;
+    }
+  });
 
   const first = toMonthDay(points[0].date);
   const last = toMonthDay(points[n - 1].date);
-  // 31点以上で幅が374を超えるときだけmin-widthを付け、横スクロールで全点を見せる
+  // 表示期間が長く幅が374を超えるときだけmin-widthを付け、横スクロールで全点を見せる
   const minWidthAttr = viewWidth > MIN_VIEW_WIDTH ? ` style="min-width:${round2(viewWidth)}px"` : '';
 
   return `<svg class="line-chart" viewBox="0 0 ${round2(viewWidth)} ${VIEW_HEIGHT}" width="100%"${minWidthAttr} role="img" aria-label="${first}から${last}までの推移(${unit})">
   ${grid}
   ${targetLine}
   ${path}
+  ${gapLines}
   ${dots}
   ${xLabels}
 </svg>`;
