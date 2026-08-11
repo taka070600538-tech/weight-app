@@ -24,15 +24,11 @@ export function renderSettingsView(container) {
       <button type="button" id="save-profile" class="save-btn">設定を保存する</button>
       <p id="profile-message" class="save-message" role="status"></p>
     </section>
-    <section class="panel">
-      <h2 class="panel-title">データについて</h2>
-      <p class="panel-note">記録はこの端末(ブラウザ)に保存され、1日1回GitHubにも自動バックアップされます。
-      機種変更のときは、新しい端末でトークンを設定して「GitHubから復元」してください。</p>
-    </section>
     <section class="panel" id="backup-section"></section>
+    <section class="panel" id="token-section"></section>
     <section class="panel">
-      <h2 class="panel-title">ファイルへのバックアップ</h2>
-      <p class="panel-note">記録と設定をファイルに書き出したり、ファイルから取り込んだりできます。</p>
+      <h2 class="panel-title">インポート・エクスポート</h2>
+      <p class="panel-note">アプリのデータをJSONファイルに書き出したり、ファイルから取り込んだりできます。</p>
       <button type="button" id="export-file-btn" class="save-btn">ファイルにエクスポート</button>
       <button type="button" id="import-file-btn" class="save-btn">ファイルからインポート</button>
       <input type="file" id="import-file-input" accept="application/json" hidden>
@@ -101,10 +97,15 @@ export function renderSettingsView(container) {
     }
   });
 
+  // 描画順を固定するため、renderSyncSettingsではなくrenderBackupControls/renderTokenSettingsを個別に呼ぶ
   import('https://taka070600538-tech.github.io/app-sync/v1/sync.js')
-    .then((sync) => sync.renderSyncSettings(container.querySelector('#backup-section')))
+    .then((sync) => {
+      sync.renderBackupControls(container.querySelector('#backup-section'));
+      sync.renderTokenSettings(container.querySelector('#token-section'));
+    })
     .catch(() => {
-      container.querySelector('#backup-section').innerHTML =
-        '<p class="panel-note">バックアップ機能は現在利用できません(オフラインの可能性)。</p>';
+      const message = '<p class="panel-note">GitHubバックアップ機能は現在利用できません(オフラインの可能性)。</p>';
+      container.querySelector('#backup-section').innerHTML = message;
+      container.querySelector('#token-section').innerHTML = message;
     });
 }
