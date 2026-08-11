@@ -1,15 +1,11 @@
 import { daysBetween } from './dateUtils.js';
 
-const VIEW_HEIGHT = 360;
-const PLOT_LEFT = 42;
-const RIGHT_MARGIN = 10;
-const MIN_VIEW_WIDTH = 374; // 表示期間が短いときの固定幅
-const PLOT_TOP = 10;
-const PLOT_BOTTOM = 305; // 下側はx軸ラベル用の余白
-const PLOT_HEIGHT = PLOT_BOTTOM - PLOT_TOP;
+const AXIS_WIDTH = 42; // y軸svgの幅
+const PLOT_PAD_LEFT = 8; // プロットsvg内の左余白
+const PLOT_PAD_RIGHT = 10; // プロットsvg内の右余白
+const SCREEN_PLOT_WIDTH = 280; // 「1画面ぶん」のプロット幅の近似
+const Y_LABEL_X = AXIS_WIDTH - 8; // y軸ラベルのx位置(text-anchor="end")
 const X_LABEL_MIN_GAP = 45;
-const X_LABEL_Y = 330;
-const Y_LABEL_X = 34;
 const AXIS_LABEL_COLOR = '#9ca3af';
 const GAP_SEGMENT_DAYS = 60; // 2ヶ月の近似。これ以上間隔が空いたら線を分割し点線で結ぶ
 
@@ -91,36 +87,45 @@ export function monotonePath(points) {
   return d;
 }
 
-export function buildLineChartSvg(points, { target = null, unit = '', color = '#059669', daysPerScreen = 365 } = {}) {
+// y軸(数値ラベル)とプロット(グリッド・線・点・x軸ラベル)を分離した2枚のsvgを持つHTML文字列を返す。
+// y軸svgは横スクロールしない側に固定され、プロットsvgだけが .chart-scroll 内で横スクロールする。
+// 拡縮はせず等倍ピクセルで描画する(width/height属性=viewBox寸法)。
+export function buildChartHtml(points, { target = null, unit = '', color = '#059669', daysPerScreen = 365, chartHeight = 220 } = {}) {
   const values = points.map((p) => p.value);
   if (target != null) values.push(target);
   const axis = computeAxis(values);
   const span = axis.top - axis.bottom;
   const n = points.length;
 
-  // x軸は日付に比例させる(等間隔ではない)。pxPerDayは「daysPerScreen日をMIN_VIEW_WIDTHに収める」密度。
-  const pxPerDay = (MIN_VIEW_WIDTH - PLOT_LEFT - RIGHT_MARGIN) / daysPerScreen;
-  const totalDays = n > 1 ? daysBetween(points[0].date, points[n - 1].date) : 0;
-  const viewWidth = Math.max(MIN_VIEW_WIDTH, PLOT_LEFT + totalDays * pxPerDay + RIGHT_MARGIN);
-  const plotRight = viewWidth - RIGHT_MARGIN;
+  const H = chartHeight;
+  const PLOT_TOP = 8;
+  const PLOT_BOTTOM = H - 30; // 下側はx軸ラベル用の余白
+  const PLOT_HEIGHT = PLOT_BOTTOM - PLOT_TOP;
+  const X_LABEL_Y = H - 10;
 
-  const xFor = (i) => (n === 1 ? (PLOT_LEFT + plotRight) / 2 : PLOT_LEFT + daysBetween(points[0].date, points[i].date) * pxPerDay);
+  // x軸は日付に比例させる(等間隔ではない)。pxPerDayは「daysPerScreen日をSCREEN_PLOT_WIDTHに収める」密度。
+  const pxPerDay = SCREEN_PLOT_WIDTH / daysPerScreen;
+  const totalDays = n > 1 ? daysBetween(points[0].date, points[n - 1].date) : 0;
+  const plotWidth = Math.max(SCREEN_PLOT_WIDTH + PLOT_PAD_LEFT + PLOT_PAD_RIGHT, PLOT_PAD_LEFT + totalDays * pxPerDay + PLOT_PAD_RIGHT);
+
+  const xFor = (i) => (n === 1 ? plotWidth / 2 : PLOT_PAD_LEFT + daysBetween(points[0].date, points[i].date) * pxPerDay);
   const yFor = (value) => PLOT_TOP + PLOT_HEIGHT * (1 - (value - axis.bottom) / span);
 
-  // 水平グリッド線と数値ラベル(浮動小数の蓄積誤差をround1で吸収)
+  // 水平グリッド線(プロット側)とy軸の数値ラベル(y軸側)。浮動小数の蓄積誤差をround1で吸収。
   let grid = '';
+  let yAxisLabels = '';
   for (let v = axis.bottom; v <= axis.top + 1e-9; v = round1(v + axis.step)) {
     const y = round2(yFor(v));
     const label = axis.step < 1 ? v.toFixed(1) : String(v);
-    grid += `<line class="chart-grid" x1="${PLOT_LEFT}" y1="${y}" x2="${round2(plotRight)}" y2="${y}" />`;
-    grid += `<text class="chart-axis-label" x="${Y_LABEL_X}" y="${round2(y + 3)}" text-anchor="end" fill="${AXIS_LABEL_COLOR}">${label}</text>`;
+    grid += `<line class="chart-grid" x1="0" y1="${y}" x2="${round2(plotWidth)}" y2="${y}" />`;
+    yAxisLabels += `<text class="chart-axis-label" x="${Y_LABEL_X}" y="${round2(y + 3)}" text-anchor="end" fill="${AXIS_LABEL_COLOR}">${label}</text>`;
   }
 
-  // 目標線(赤の点線)
+  // 目標線(赤の点線)。スクロール領域全幅に引く。
   let targetLine = '';
   if (target != null) {
     const y = round2(yFor(target));
-    targetLine = `<line x1="${PLOT_LEFT}" y1="${y}" x2="${round2(plotRight)}" y2="${y}" style="stroke:#ef4444; stroke-width:1.5; stroke-dasharray:4 4;" />`;
+    targetLine = `<line x1="0" y1="${y}" x2="${round2(plotWidth)}" y2="${y}" style="stroke:#ef4444; stroke-width:1.5; stroke-dasharray:4 4;" />`;
   }
 
   const xy = points.map((p, i) => ({ x: round2(xFor(i)), y: round2(yFor(p.value)) }));
@@ -173,10 +178,12 @@ export function buildLineChartSvg(points, { target = null, unit = '', color = '#
 
   const first = toMonthDay(points[0].date);
   const last = toMonthDay(points[n - 1].date);
-  // 表示期間が長く幅が374を超えるときだけmin-widthを付け、横スクロールで全点を見せる
-  const minWidthAttr = viewWidth > MIN_VIEW_WIDTH ? ` style="min-width:${round2(viewWidth)}px"` : '';
 
-  return `<svg class="line-chart" viewBox="0 0 ${round2(viewWidth)} ${VIEW_HEIGHT}" width="100%"${minWidthAttr} role="img" aria-label="${first}から${last}までの推移(${unit})">
+  const yAxisSvg = `<svg class="chart-yaxis" width="${AXIS_WIDTH}" height="${H}" viewBox="0 0 ${AXIS_WIDTH} ${H}">
+  ${yAxisLabels}
+</svg>`;
+
+  const lineChartSvg = `<svg class="line-chart" width="${round2(plotWidth)}" height="${H}" viewBox="0 0 ${round2(plotWidth)} ${H}" role="img" aria-label="${first}から${last}までの推移(${unit})">
   ${grid}
   ${targetLine}
   ${path}
@@ -184,4 +191,6 @@ export function buildLineChartSvg(points, { target = null, unit = '', color = '#
   ${dots}
   ${xLabels}
 </svg>`;
+
+  return `<div class="chart-area">${yAxisSvg}<div class="chart-scroll">${lineChartSvg}</div></div>`;
 }

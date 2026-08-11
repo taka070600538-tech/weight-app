@@ -195,32 +195,12 @@ body {
 .muted { color: #94a3b8; }
 
 /* ---- グラフタブ ---- */
-.chart-scroll { overflow-x: auto; }
+.chart-area { display: flex; align-items: flex-start; }
+.chart-yaxis { flex-shrink: 0; display: block; }
+.chart-scroll { flex: 1; overflow-x: auto; }
 .line-chart { display: block; }
 .chart-grid { stroke: #e2e8f0; stroke-width: 1; }
 .chart-axis-label { font-size: 11px; }
-
-/* 期間切替(セグメントコントロール) */
-.seg-control {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 14px;
-}
-.seg-btn {
-  flex: 1;
-  padding: 10px 0;
-  border: 1px solid #cbd5e1;
-  background: #fff;
-  border-radius: 10px;
-  font-size: 14px;
-  cursor: pointer;
-}
-.seg-btn.is-active {
-  background: #059669;
-  border-color: #059669;
-  color: #fff;
-  font-weight: 700;
-}
 
 .empty-state {
   background: var(--card);
