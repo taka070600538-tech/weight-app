@@ -39,10 +39,11 @@
 
 ## データ設計
 
-- localStorage キーは `weight-app.` プレフィックスで名前空間分離
+- localStorage キーは `weight-app:` プレフィックスで名前空間分離
   (同一オリジンの全アプリで localStorage が共有されるため)
-  - `weight-app.records`: `{ "YYYY-MM-DD": { weight, waist, memo } }` 形式(日付キーのオブジェクト)
-  - `weight-app.profile`: `{ height, targetWeight, targetWaist }`
+  - `weight-app:records`: `[{ date: 'YYYY-MM-DD', weight, waist, memo, createdAt }]`
+    (日付昇順の配列。血圧手帳と同じ形式で、date をキーに upsert して1日1件を保つ)
+  - `weight-app:profile`: `{ height, targetWeight, targetWaist }`(未設定は null)
 - app-sync の collect/restore は records と profile をまとめた1オブジェクトを扱う
 - 復元(GitHubから復元)は全置き換え。PC→アプリ方向の反映時は push 前にマージ必須(血圧手帳と同運用)
 
