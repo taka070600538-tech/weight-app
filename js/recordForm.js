@@ -25,14 +25,15 @@ function historyHtml(records, height) {
     </div>`;
   }
   const rows = [...records].reverse().map((r) => {
-    const bmi = r.weight != null && height ? computeBmi(r.weight, height) : null;
-    const weight = r.weight != null ? `<b>${r.weight.toFixed(1)}</b>kg` : '<span class="muted">—</span>';
-    const waist = r.waist != null ? `<b>${r.waist.toFixed(1)}</b>cm` : '<span class="muted">—</span>';
+    const date = escapeHtml(r.date);
+    const bmi = Number.isFinite(r.weight) && height ? computeBmi(r.weight, height) : null;
+    const weight = Number.isFinite(r.weight) ? `<b>${r.weight.toFixed(1)}</b>kg` : '<span class="muted">—</span>';
+    const waist = Number.isFinite(r.waist) ? `<b>${r.waist.toFixed(1)}</b>cm` : '<span class="muted">—</span>';
     return `<li class="history-row">
       <div class="history-main">
-        <span class="history-date">${r.date}</span>
+        <span class="history-date">${date}</span>
         <span class="history-vals">${weight} / ${waist}${bmi != null ? `<span class="history-bmi">BMI ${bmi.toFixed(1)}</span>` : ''}</span>
-        <button type="button" class="delete-btn" data-date="${r.date}">削除</button>
+        <button type="button" class="delete-btn" data-date="${date}">削除</button>
       </div>
       ${r.memo ? `<p class="history-memo">${escapeHtml(r.memo)}</p>` : ''}
     </li>`;
