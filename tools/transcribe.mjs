@@ -60,7 +60,7 @@ export function runTranscription({ records, diaryDir, today }) {
   for (const date of datesToTranscribe(records, today)) {
     const section = buildDaySection(records, date);
     if (!section) continue;
-    const path = join(diaryDir, `${date}.md`);
+    const path = join(diaryDir, `スマホ - ${date}.md`);
     try {
       const existing = existsSync(path) ? readFileSync(path, 'utf8') : '';
       const next = upsertSection(existing, section);
