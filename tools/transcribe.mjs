@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 const START = '<!-- weight-app:start -->';
 const END = '<!-- weight-app:end -->';
 const DEFAULT_BACKUP = String.raw`D:\Obsidian Vault for Claude Code\Git\app-data\weight-app\backup.json`;
-const DEFAULT_DIARY_DIR = String.raw`D:\Obsidian Vault for Claude Code\01_原油`;
+const DEFAULT_DIARY_DIR = String.raw`D:\Obsidian Vault for Claude Code\01-NOTE`;
 
 export function todayString(now = new Date()) {
   const y = now.getFullYear();
